@@ -1,0 +1,139 @@
+---
+title: "Mortality Exercises 3: Person Years Remaining"
+author: Joshua R. Goldstein
+output: html_notebook
+---
+
+In these exercises, we will calculate person-years lost from a sudden mortality crisis like Covid. Our approach will be to do the full life-table calculation and then compare this to the approximation involving $H/A$ that we did in lecture.
+
+More future reference (but not now), see Goldstein and Lee (2020) (https://www.pnas.org/content/117/36/22035.full)
+
+
+
+
+
+## A. Person years remaining in stationary pop with US life table
+
+Here we're going to sum up all of the person-years in a simulated but not-totally-unrealistic population
+
+Notes:
+* We are using 2019 period life table from Human Mortality Database
+* Remaining person years is a cohort concept, but we are using
+ period life expectancy for simplicity here.
+* We are using stationary age structure, not the observed
+* To give us numbers that are the right order of magnitude, we're
+ going to assume 3.5 million births.
+* We're going to be a bit sloppy with distinction between l(x) vs L(x). For actual research, please be more careful.
+
+
+Some preliminaries
+
+```{r}
+
+library(data.table)
+dt <- fread("exercise_2_data.csv") ## data
+source("exercise_2_funs.R") ## function
+head(dt) ## just to see what's there
+hx = dt$hx ## assign baseline mortatity (from 2019 period)
+
+## to get the stationary population, we compute the life table from these mortality rates
+lt = get.lt(hx) ## function to make life table, print(get.lt) for gory details
+lx = lt$lx
+ex = lt$ex
+Lx = lt$Lx
+x = lt$x
+## you can try plotting a function if you want: e.g. plot(x, ex)
+
+## To make more realistic let's have the stationary population has 3.5
+## million births per year, pretty close to USA
+
+Nx.stationary = lx * 3.5
+sum(Nx.stationary) ## [1] 278.8149
+```
+
+
+
+Now we're ready to calculate remaining person years, which will be
+the number of people in each age group, multiplied by their life
+expectancy, summed over all ages.
+
+```{r}
+remaining.py = sum(Nx.stationary * ex)
+## [1] 11606.68, or 11.6 billion
+```
+
+> Q.1 How many person years remain per person?  
+
+> (Fun fact: in stationary population average life remaining is the same as average age of  pop! 
+> Life left = life lived)
+
+
+## B. Person Years Lost
+
+Here we assume there is a "flash" of mortality, with intensity 1/3 of
+all-cause annual mortality. How many person years will be lost?
+
+```{r}
+## Number of deaths at each age
+Dx.flash = Nx.stationary * hx/3
+
+lost.py = sum(Dx.flash * ex)
+print(lost.py)
+## [1] 14.83438, 14.8 _million_ not _billion_
+```
+
+What fraction of the original person-years of the population were lost?
+```{r}
+lost.py.frac = lost.py / remaining.py
+print(lost.py.frac)
+## [1] 0.001278089
+## or
+## 1/lost.py.frac
+## [1] 782.4179
+## a bit more than 1/800
+```
+
+
+> Q2. How many person years remain _per person_ after the flash of
+> mortality? How many years are lost _per person_? Is this a few
+>  years, months, weeks, days, or hours, ...?
+
+
+## C. Share of person-years lost (using our approximation)
+
+Compare your answer to our approximation which tells us that the
+fraction of person years lost in this case should be about H * delta/A
+
+We leave it to you to calculate $H$ and $A$ that correspond to the stationary population to the 2019 US life table
+
+(Note: The values should be something close to $H = 0.15$ and $A = 40$. If you're having trouble estimating the exact values, you can use these in order to answer the Qs)
+
+```{r}
+delta = 1/3
+A = NA ## fill in a formula for average age of stationary population. 
+## Hint: fraction aged x is Lx / sum(Lx)
+
+H = NA  ## Fill in formula for Keyfitz's entropy H. 
+## Hint: Take a look at exercise 2.
+
+lost.py.frac.hat  = H * delta / A
+print(lost.py.frac.hat)
+```
+> Q3. How did we do? Are we close to life-table based calculation?
+
+> Q4. On twitter, one of the workshop participants didn't like this
+> approach, saying that the tiny number was misleading --  and said that
+> it was like comparing the economic damage done by Hurricane Katrina
+> in New Orleans to the GDP of the entire USA. It would seem
+> small, but is a minimizing way to think about the actual damage of
+> the Hurricane. What do _you_ think?
+
+Note: When comparing past mortality crisis, Goldstein and Lee had similar concerns and ended up divided remaining-years-lost from each crisis by the remaining-years-lost in a corresponding non-crisis year. You can look at their Fig. 4 to see the results of this analysis. (https://www.pnas.org/content/117/36/22035.full)
+
+## Congratulations!
+
+You've finished the last exercise of the day!
+
+
+
+

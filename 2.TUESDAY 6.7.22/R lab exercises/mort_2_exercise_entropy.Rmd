@@ -1,0 +1,194 @@
+---
+title: "Mortality Exercises 2: Entropy"
+author: Joshua R. Goldstein
+output: html_notebook
+---
+
+In these exercises, we build on what you did in the pre-lab exercises, using the "entropy" approximation, and applying the logic to Covid.
+
+Note 1: There were about half-a-million additional Covid deaths in the US
+in 2020, compared to 3 million that would have been expected
+without Covid. So the increase in death rates was about 1/6 and we're going to assume $\delta = 1/6$.
+
+Note 2: We're going to use the following naming conventions.
+
+* suffix of ".lt" means it's  based on the calculation of the full life table, assuming proportional change in hazards
+* suffix of  ".entropy" means it's based on entropy approximation
+* suffix of ".realistic" means it's based on full calculation of life table assuming a realistic, not-exactly proportional increase in hazards at all ages.
+
+## Preliminaries
+
+```{r}
+## Input data and convenience functions
+library(data.table)
+source("exercise_2_funs.R") ## get.lt() and get.e0()
+dt <- fread("exercise_2_data.csv") ## contains baseline hazards 
+
+## Create variables from data
+x = dt$x ## age
+hx.base = dt$hx ## US all-cause mortality by age in 2019 (without covid)
+```
+
+
+
+##   A. Use full life table to calculate change e0, assuming proportionality
+
+
+In order to calculate life expectancy without Covid, we use age-specific mortality rates (hazards) fro 2019 US and our function that calculates life expectancy at birth from hazards. Note: If you're curious about what get.e0() does, just type print(get.e0).
+
+```{r}
+e0.base = get.e0(hx.base) ## [1] 79.11594
+print("e0.base")
+print(e0.base)
+```
+
+Now calculate e0.covid.lt, assuming covid is proportional to
+baseline mortality and using our life-table function to calculate
+life expectancy from hazards
+```{r}
+delta = 1/6 ## increase in hazards at all ages from Covid
+e0.covid.lt = get.e0(hx.base * (1 + delta)) ## recalculation with new hazards
+print("e0 with covid, life table calculation using proportional covid")
+print(e0.covid.lt)
+```
+
+
+And let's also calculate drop in e0.
+
+```{r}
+## By how many years does e0 change?
+e0.change.lt = e0.covid.lt - e0.base
+print("e0 change, life table calculation using proportional covid")
+print(e0.change.lt)
+```
+
+> Q1. Did life expectancy decline by 1/6th? If not, how much did it 
+> decline by, and what value of entropy does this suggest?
+
+
+
+##   B. Compare to entropy result 
+
+We start by getting Lx using our built in functions. Note: we could also calculate sum(lx *log(lx))/sum(lx), but better to use Lx.
+
+```{r}
+lt = get.lt(hx.base) ## using our
+x = lt$x
+Lx = lt$Lx
+```
+
+Now compute Keyfitz $H$
+```{r}
+e0 = sum(Lx)
+keyfitz.H = -sum(log(Lx)*Lx)/e0 
+print(keyfitz.H)
+
+## Note: you can also calculate entropy as sum(ex*Lx*hx)/e0. If we had
+## even finer age groups we would get the same number. With the 1-year
+## age groups we get very close.
+```
+
+> Q2. What is your estimate of H? Is this close to what you expected in Q1?
+
+Now we can use $H$ to calculate effect on life expectancy
+
+```{r}
+## calculate estimate of proportional decline
+e0.proportional.change.entropy = -keyfitz.H * delta
+
+## convert to estimate of absolute decline
+e0.change.entropy = e0.base * e0.proportional.change.entropy
+print(e0.change.entropy)
+```
+
+Now let's compare:
+```{r}
+result = c(e0.change.lt = e0.change.lt,
+           e0.change.entropy= e0.change.entropy)
+print(round(result, 1))
+```
+
+> Q3. Does the entropy approximation give exactly the same answer as
+> the life table calculation? Any ideas why they might differ?
+
+## C. Using a more realistic schedule
+
+Instead of using proportional assumption, we can use observed age 
+pattern of Covid mortality. For this we will use the "standard" 
+estimated by Goldstein and Lee early in the pandemic.
+
+
+```{r}
+hx.covid.realistic = dt$hx.covid ## Covid mortality in US
+## Note: hx.covid.realistics is based on standard age schedule from
+## Goldstein and Lee, rescaled to produce exactly the same number of
+## deaths as a 1/6 increase in mortality at all ages.
+```
+
+And now use this hazard schedule to recalculate effect on e0
+```{r}
+e0.covid.realistic = get.e0(hx.base + hx.covid.realistic)
+
+## estimated drop
+e0.change.realistic = e0.covid.realistic - e0.base
+
+## print out results
+result.again = c(e0.change.lt = e0.change.lt,
+                 e0.change.entropy= e0.change.entropy,
+                 e0.change.realistic = e0.change.realistic)
+print(round(result.again, 1))
+```
+
+> Q4. You should see that life expectancy decline is smaller using
+> the more realistic schedule. Why do you think this might be? Answer
+> before (and after) looking at the plot below.
+
+Here's a plot to compare the age-schedules
+
+```{r}
+
+
+hx.covid.prop = delta * hx.base ## Covid mortality in US, assuming proportional increase
+par(mfrow = c(2,2))
+plot(x, hx.covid.realistic, type = "l", col = "blue", lty = 1, log = '',
+     main = "Covid mortality estimates")
+lines(x, hx.covid.prop, col = "red", lty=2)
+legend("topleft",
+       legend = c("Proportional",
+                  "'Realistic'"),
+       col = c("red", "blue"),
+       lty = c(2,1),
+       bty = "n")
+## log
+plot(x, hx.covid.realistic, type = "l", col = "blue", lty = 1, log = 'y',
+     main = "Covid mortality estimates (log)")
+lines(x, hx.covid.prop, lty = 2, col = "red")
+legend("topleft",
+       legend = c("Proportional",
+                  "'Realistic'"),
+       col = c("red", "blue"),
+       lty = c(2,1),
+       bty = "n")
+## Note: the blue line looks perfectly straight but in actuality it's slope does vary a bit
+## zoom in on at slopes of log plot
+plot(x[-1], diff(log(hx.covid.realistic)),
+     main = "Slopes of log of \n  realistic schedule")
+
+```
+
+You should see that observed Covid mortality increases by a bit more than proportionately at older ages and a bit less at younger ages. (Although there are many data issues that mean we're still not that certain about the exact Covid mortality rates.)
+
+You can also double check that the two schedules correspond to the same number of deaths.
+
+```{r}
+Nx.usa <- dt$Nx
+print(sum(hx.covid.prop*Nx.usa))
+print(sum(hx.covid.realistic*Nx.usa))
+## the should match!
+```
+
+## Congratulations. 
+
+You've finished the 2nd set of exercises of Day 2 of the workshop. Only one more to go!
+
+

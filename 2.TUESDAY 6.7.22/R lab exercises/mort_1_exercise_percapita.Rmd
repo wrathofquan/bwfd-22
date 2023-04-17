@@ -1,0 +1,181 @@
+---
+title: "Mortality Exercises 1: Per Capita Death Rates"
+author: Joshua R. Goldstein
+output: html_notebook
+---
+
+In these exercises, we'll look at how per capita death rates are influenced by age structure, taking advantage of the stable population model. 
+
+The stable population model allows us to compare the per capita ("crude") death rates of stable populations with the same age-specific mortality rates and differing growth rates. 
+
+We will use a stable population growth rate of +2 per cent as a loose approximation of India and a stable population with a growth rate of 0 per cent as a loose approximation of the United States.
+
+## Preliminaries
+
+Upload the data and define some variables. Note we're going to use "x" for age, although the lectures used "a".
+
+```{r}
+library(data.table)
+dt <- fread("exercise_1_data.csv")
+x = dt$x
+x.mid = x + .5  ## mid-point estimate for age group.
+Lx = dt$Lx 
+hx = dt$hx
+Nx = dt$Nx.usa ## population counts
+```
+
+##  A. Calculate difference in crude death rates for r = +2% and 0% via simulation.
+
+```{r}
+r.0 = 0 ## resembling USA
+r.2 = +0.02 ## resembling India
+
+## stable age structures
+cx.0 = exp(-r.0 * x) * Lx / sum( exp(-r.0 * x) * Lx )
+cx.2 = exp(-r.2 * x) * Lx / sum( exp(-r.2 * x) * Lx )
+plot(cx.2, x)
+lines(cx.0, x)
+```
+
+> Q1: Which population is the solid line and which is the dots?
+
+Now let's get the crude death rates (AKA "per-capita" aggregate death rates)
+```{r}
+
+## crude death rates, with different age structures but same age-specific mortality
+cdr.0 = sum(cx.0 * hx)
+cdr.2 = sum(cx.2 * hx)
+
+print("CDR with zero growth")
+print(round(cdr.0, 4))
+print("CDR with +2% growth")
+print(round(cdr.2, 4))
+```
+
+Let's convert this to a ratio:
+```{r}
+print("simulated ratio of per capita mortality in high growth to low growth pops")
+cdr.ratio.simu = cdr.2/cdr.0
+print(cdr.ratio.simu)
+## [1] 0.451164, less than half!
+```
+
+> Q2. Does it appear that the historical growth rate of a population
+> matters "a little" or "a lot"  for per capita Covid mortality?
+
+## B. Calculate using comparative statics
+
+Now we're going to use our comparative statics result to re-estimate the change in per capita death rates that results from changing the growth rate.
+
+Our result was
+$$
+\Delta \log CDR(r) = \Delta r (A_0 - e_0)
+$$
+
+So, we'll start by getting the mean age of the stationary population ($A_0$) and life expectancy ($e_0$).
+
+```{r}
+## mean age of stationary pop
+A0 = sum(x.mid * Lx) / sum(Lx)
+print("Mean age of stationary pop")
+print(A0)
+## mean age of death in stationary pop
+e0 = sum(Lx)
+print("Mean age of death in stationary pop")
+print(e0)
+
+## Change in growth rate
+Delta.r = r.2 - r.0
+print("Change in 'r'")
+print(Delta.r)
+```
+
+Now we're ready to use our formula
+
+```{r}
+## Comparative statics estimate of how much log of CDR changes
+Delta.log.cdr.hat = (A0 - e0) * Delta.r
+print(Delta.log.cdr.hat)
+```
+
+In order to make sense of this number, which tells us the change in the log of the death rate, let's convert to a ratio. Exponentiating should do the trick, since 
+
+$$
+\exp[\log(A) - \log(B)] = A/B
+$$
+
+```{r}
+## Convert to ratio, since A/B = exp(log(A) - log(B))
+cdr.ratio.hat = exp(Delta.log.cdr.hat)
+print("comparative statics approxiamtion of same ratio")
+print(cdr.ratio.hat)
+```
+Let's compare the two results
+```{r}
+result = c("cdr.ratio.simu" = cdr.ratio.simu,
+           "cdr.ratio.hat" = cdr.ratio.hat)
+print(round(result, 3))
+```
+
+> Q2. How accurate is the comparative statics approximation?
+> "Super accurate", "pretty accurate", or "not very accurate"?
+
+Note: please don't take the good accuracy of this one example as
+typical. Often the approximations are much worse, because we're
+only using the linear term of Taylor approximation.
+
+## C. Adapt for Covid
+
+Until now we've been discussing the all-cause mortality rate. But the logic should carry over to the per-capita Covid mortality rate.
+
+We'll use the standard Covid mortality age schedule estimated by Goldstein and Lee, and then use our comparative statics approach to compare the two stable populations.
+
+Import the covid age-specific death rates:
+```{r}
+## Import Goldstein and Lee's schedule of Covid mortality rates
+## (Note: these have realistic age profile, but the level is set to produce 1 million deaths in US)
+dt <- fread("https://raw.githubusercontent.com/josh-goldstein-git/dempersp_covid_mortality/master/data/cleaned/normalized_nMx_out.csv")
+hx.covid = dt[x %in% 0:100]$Mx_covid_scaled
+```
+
+The approximation we want to use for the effect of the growth rate on per capita Covid deaths needs to be adapted so that it uses the mean age of death from Covid in the stationary population. It should be
+
+$$
+\Delta \log CDR_{covid} = (A_0 - A_{D(covid)}) \Delta r,
+$$
+where the age of death in the stationary pop from Covid is
+$$
+A_{D(covid)} = {\int x h_x^{covid} \ell(x) \,dx \over \int h_x^{covid}\ell(x), \,dx}
+$$
+
+```{r}
+A.D.covid = sum(x *hx.covid * Lx) / sum(hx.covid*Lx)
+print("Mean age of death from Covid in stationary pop")
+print(A.D.covid)
+```
+
+> Q3. Is the mean age of death from Covid higher or lower than e0? 
+>  Is this what you expected?
+
+> Q4. Would you expect per capita death rates for covid to be more or
+>  less sensitive to the rates of historical growth that determine age
+>  structure? Can your answer to Q3 help here?
+
+> Q5. Looking back at the graph from Science, after doing this
+>  exercise do you think it's still a mystery why per capita Covid
+>  mortality is lower in India than the U.S.? 
+
+
+> Q6. Advanced question that we probably won't have time to discuss 
+> but Josh is happy to do on Piazza: How might you do a comparative 
+> statics type calculation for per capita Covid mortality comparing 
+> countries with similar growth rates but different longevity?
+> (e.g., France and USA). Or countries with different growth rates and
+> different longevity (e.g., Italy and USA)
+
+## Congratulations. 
+
+You've finished the 1st set of exercises of Day 2 of the workshop. One down and two more to go!
+
+
+
